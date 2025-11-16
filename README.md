@@ -53,7 +53,6 @@ Recommended pairs:
 
 ## License
 - Custom plugins: GPL2.0+ (see individual plugin headers).
-- Formidable Forms, Pro, and Dates are © Strategy11 and included here only for local testing.
 
 ## Support
 These plugins are provided as‑is. For issues or suggestions, open an issue on the repo with the plugin name, WP version, Formidable version, and steps to reproduce.
