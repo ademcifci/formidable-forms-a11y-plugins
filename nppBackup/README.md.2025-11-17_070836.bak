@@ -24,7 +24,7 @@ You can use any plugin independently:
 
 Recommended pairs:
 - Accessible error flows: install both `formidable-accessible-errors` and `formidable-global-a11y-enhancements`.
-
+- Choice groups semantics: install `formidable-radio-checkbox-fieldset` (for builder templates) and/or `ff-fieldset-container-field` (fieldset start/end containers).
 
 ## Notable Interactions
 - Accessible Error Summary vs Global A11y Enhancements:
