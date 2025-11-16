@@ -1,6 +1,6 @@
-# Formidable Custom Plugins
+# Formidable Forms A11y enhancement Plugins
 
-A collection of custom accessibility and UX plugins that enhance Formidable Forms without modifying core. Each plugin is self‑contained and can be installed independently.
+A collection of custom accessibility and UX plugins that enhance Formidable Forms without modifying core. Each plugin is self-contained and can be installed independently.
 
 These are all a work in progress. While each plugin has been tested, and hasn't broken anything, you use at your own risk knowing they are in development.
 
@@ -33,7 +33,7 @@ Recommended pairs:
 - AJAX scope: Global A11y Enhancements scopes its AJAX listeners to Formidable‑related requests to avoid unrelated triggers.
 - Duet Date Picker: loads Duet assets from a CDN to ensure module/nomodule compatibility; only enqueued when a form has a Duet field (and in relevant admin screens).
 
-## Per‑Plugin Highlights
+## Per Plugin Highlights
 - Formidable Global A11y Enhancements
   - Focuses success messages and, when appropriate, error summaries.
   - On multipage navigation, focuses the first visible heading (configurable H1–H6) with retries; prefers error summary when present.
@@ -53,7 +53,7 @@ Recommended pairs:
 - No core edits; features are implemented with filters/actions and small JS/CSS helpers.
 
 ## License
-- Custom plugins: GPL‑2.0+ (see individual plugin headers).
+- Custom plugins: GPL2.0+ (see individual plugin headers).
 - Formidable Forms, Pro, and Dates are © Strategy11 and included here only for local testing.
 
 ## Support
