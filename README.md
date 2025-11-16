@@ -1,4 +1,4 @@
-# Formidable Forms A11y enhancement Plugins
+# Formidable Forms A11y Enhancement Plugins
 
 A collection of custom accessibility and UX plugins that enhance Formidable Forms without modifying core. Each plugin is self-contained and can be installed independently.
 
@@ -31,7 +31,6 @@ Recommended pairs:
   - When `formidable-accessible-errors` is active, Global A11y Enhancements detects it and skips its own error summary focusing to avoid conflicts.
   - Global A11y Enhancements respects the Formidable filter `frm_include_alert_role_on_field_errors`. If a theme/plugin disables alert roles (returns false), it removes `role="alert"` from inline field errors on the frontend.
 - AJAX scope: Global A11y Enhancements scopes its AJAX listeners to Formidable‑related requests to avoid unrelated triggers.
-- Duet Date Picker: loads Duet assets from a CDN to ensure module/nomodule compatibility; only enqueued when a form has a Duet field (and in relevant admin screens).
 
 ## Per Plugin Highlights
 - Formidable Global A11y Enhancements
