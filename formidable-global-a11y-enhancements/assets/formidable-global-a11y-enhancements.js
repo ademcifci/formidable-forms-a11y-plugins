@@ -22,6 +22,8 @@
     has_accessible_errors: false,
     remove_alert_role_on_field_errors: false,
     remove_choice_error_alert_role: false,
+    loading_focus_anchor: false,
+    sync_page_title: false,
     debug_tabindex: false
   };
   CFG.has_accessible_errors = !!CFG.has_accessible_errors;
@@ -130,7 +132,10 @@
       }
     }
 
-    // Success messages
+    // Success messages - defer to Accessible Error Summary when active.
+    if (CFG.has_accessible_errors) {
+      return;
+    }
     if (!CFG.success_message_focus) return;
     var $msg = $ctx.find('.frm_message').first();
     if ($msg.length) {
@@ -140,6 +145,71 @@
       return;
     }
     return;
+  }
+
+  var supportsWeakSet = typeof WeakSet !== 'undefined';
+  var processedMessages = supportsWeakSet ? new WeakSet() : [];
+
+  function hasSeenMessage(node) {
+    if (!node) {
+      return false;
+    }
+    if (supportsWeakSet) {
+      return processedMessages.has(node);
+    }
+    for (var i = 0; i < processedMessages.length; i++) {
+      if (processedMessages[i] === node) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function rememberMessage(node) {
+    if (!node) {
+      return;
+    }
+    if (supportsWeakSet) {
+      processedMessages.add(node);
+      return;
+    }
+    processedMessages.push(node);
+  }
+
+  function observeSuccessMessages() {
+    if (typeof MutationObserver === 'undefined') {
+      return;
+    }
+    try {
+      var observer = new MutationObserver(function (mutations) {
+        if (!mutations || !mutations.length) {
+          return;
+        }
+        for (var i = 0; i < mutations.length; i++) {
+          var mutation = mutations[i];
+          if (!mutation.addedNodes || !mutation.addedNodes.length) {
+            continue;
+          }
+          for (var j = 0; j < mutation.addedNodes.length; j++) {
+            var node = mutation.addedNodes[j];
+            if (!node || node.nodeType !== 1) {
+              continue;
+            }
+            var target = null;
+            if (node.classList && node.classList.contains('frm_message')) {
+              target = node;
+            } else if (node.querySelector) {
+              target = node.querySelector('.frm_message');
+            }
+            if (target && !hasSeenMessage(target)) {
+              rememberMessage(target);
+              focusMessages(target);
+            }
+          }
+        }
+      });
+      observer.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    } catch (e) {}
   }
 
   // 3) Multi-page: focus H1 in the current page/form after navigation
@@ -156,6 +226,15 @@
       return true;
     }
     return false;
+  }
+
+  function runEnhancements(context) {
+    var ctx = context || document;
+    if (CFG.other_fields_fix) {
+      enhanceOtherInputs(ctx);
+    }
+    adjustInlineErrorRoles(ctx);
+    focusMessages(ctx);
   }
 
   function attemptFocusH1Around($el, tries, delay) {
@@ -182,9 +261,116 @@
     setTimeout(function () { attemptFocusH1Around($el, tries - 1, delay); }, delay);
   }
 
+  var focusAnchorNode = null;
+  var originalTitle = document.title || '';
+  var loadingMessage = 'Loading, please wait.';
+
+  function ensureFocusAnchor() {
+    if (focusAnchorNode && document.body.contains(focusAnchorNode)) {
+      return focusAnchorNode;
+    }
+    var existing = document.getElementById('ff-globa11y-focus-anchor');
+    if (existing) {
+      focusAnchorNode = existing;
+      return focusAnchorNode;
+    }
+    var anchor = document.createElement('div');
+    anchor.id = 'ff-globa11y-focus-anchor';
+    anchor.setAttribute('tabindex', '-1');
+    anchor.setAttribute('role', 'status');
+    anchor.setAttribute('aria-live', 'polite');
+    anchor.style.position = 'absolute';
+    anchor.style.padding = '0';
+    anchor.style.margin = '-1px';
+    anchor.style.width = '1px';
+    anchor.style.height = '1px';
+    anchor.style.overflow = 'hidden';
+    anchor.style.clip = 'rect(0 0 0 0)';
+    anchor.style.borderWidth = '0';
+    anchor.style.whiteSpace = 'nowrap';
+
+    if (document.body && document.body.firstChild) {
+      document.body.insertBefore(anchor, document.body.firstChild);
+    } else if (document.body) {
+      document.body.appendChild(anchor);
+    }
+    focusAnchorNode = anchor;
+    return focusAnchorNode;
+  }
+
+  function clearFocusAnchorMessage() {
+    if (focusAnchorNode && focusAnchorNode.textContent) {
+      focusAnchorNode.textContent = '';
+    }
+  }
+
+  function handleLoadingFocus() {
+    if (!CFG.loading_focus_anchor) {
+      return;
+    }
+    var anchor = ensureFocusAnchor();
+    if (!anchor) {
+      return;
+    }
+    anchor.textContent = loadingMessage;
+    try {
+      anchor.focus();
+    } catch (e) {}
+  }
+
+  function initLoadingFocusAnchor() {
+    if (!CFG.loading_focus_anchor) {
+      return;
+    }
+    ensureFocusAnchor();
+    var selectors = '.frm_ajax_submit .frm_prev_page, .frm_ajax_submit .frm_next_page, .frm_ajax_submit .frm_submit, button.frm-abandonment-modal-btn.frm-abandonment-modal-btn-primary';
+    $(document).on('click', selectors, handleLoadingFocus);
+    $(document).on('frmFormComplete frmPageChanged', clearFocusAnchorMessage);
+  }
+
+  function normalizeHeadingLevel(level) {
+    var parsed = parseInt(level, 10);
+    if (!(parsed >= 1 && parsed <= 6)) {
+      parsed = 1;
+    }
+    return parsed;
+  }
+
+  function updateTitleFromHeading() {
+    if (!CFG.sync_page_title) {
+      return;
+    }
+    var level = normalizeHeadingLevel(CFG.multi_page_focus_level);
+    var selector = 'h' + level;
+    var heading = document.querySelector(selector);
+    if (!heading || !heading.textContent) {
+      document.title = originalTitle;
+      clearFocusAnchorMessage();
+      return;
+    }
+    var text = heading.textContent.trim();
+    if (text) {
+      document.title = text + ' \u2013 ' + originalTitle;
+    } else {
+      document.title = originalTitle;
+    }
+    clearFocusAnchorMessage();
+  }
+
+  function initTitleSync() {
+    if (!CFG.sync_page_title) {
+      return;
+    }
+    updateTitleFromHeading();
+    $(document).on('frmFormComplete frmPageChanged', updateTitleFromHeading);
+  }
+
   $(function () {
     // Track last submitter in case submit happens without a click event
     var lastSubmitter = null;
+    observeSuccessMessages();
+    initLoadingFocusAnchor();
+    initTitleSync();
     if (CFG.multi_page_focus) {
       $(document).on('click keydown', '.frm_next_page, .frm_prev_page', function () {
         lastSubmitter = this;
@@ -198,10 +384,7 @@
         }
       });
     }
-    if (CFG.other_fields_fix) {
-      enhanceOtherInputs(document);
-    }
-    adjustInlineErrorRoles(document);
+    runEnhancements(document);
     
 
     // Multi-page: handle following scenarios
@@ -232,10 +415,7 @@
           return; // ignore unrelated AJAX completions
         }
       } catch (e) {}
-      if (CFG.other_fields_fix) {
-        enhanceOtherInputs(document);
-      }
-      adjustInlineErrorRoles(document);
+      runEnhancements(document);
       // Focus H1 only if a Next/Prev navigation was initiated (session flag)
       if (CFG.multi_page_focus) {
         if (consumeMpIntent()) {
@@ -248,10 +428,7 @@
     });
 
     setTimeout(function () {
-      if (CFG.other_fields_fix) {
-        enhanceOtherInputs(document);
-      }
-      adjustInlineErrorRoles(document);
+      runEnhancements(document);
 
       // Non-AJAX multipage: if we land on a page with a visible Prev button, we are not on page 1
       if (CFG.multi_page_focus) {
@@ -282,6 +459,17 @@
       });
     }
   });
+
+  function handleFormidableLoadEvent(event) {
+    var target = event && event.target ? event.target : null;
+    var ctx = target && target.nodeType === 1 ? target : document;
+    runEnhancements(ctx);
+  }
+
+  try {
+    document.addEventListener('frmProAfterFormFadeIn', handleFormidableLoadEvent, true);
+    document.addEventListener('frm_after_start_over', handleFormidableLoadEvent);
+  } catch (e) {}
 })(jQuery);
 
 

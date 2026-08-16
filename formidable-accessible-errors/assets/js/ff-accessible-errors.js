@@ -1,12 +1,58 @@
 (function ($) {
   'use strict';
 
+  var CFG = window.FFAE || {
+    inlineIconEnabled: true,
+    inlineIconAriaLabel: 'Error:',
+    successMessageFocus: true,
+    errorSummarySelector: '.ff-global-errors'
+  };
+
+  function getSummarySelector() {
+    return CFG.errorSummarySelector || '.ff-global-errors';
+  }
+
+  function findSummaries(root) {
+    var $root = root ? $(root) : $(document);
+    var $summaries = $root.find('[data-ff-error-summary]');
+    if (!$summaries.length) {
+      $summaries = $root.find(getSummarySelector());
+    }
+    return $summaries;
+  }
+
+  function nodeHasSummary($node) {
+    if (!$node || !$node.length) {
+      return false;
+    }
+    if ($node.is('[data-ff-error-summary]') || $node.find('[data-ff-error-summary]').length) {
+      return true;
+    }
+    var selector = getSummarySelector();
+    return $node.is(selector) || $node.find(selector).length > 0;
+  }
+
+  /**
+   * Unhide Formidable's .frm_error_style wrapper when it contains our summary.
+   */
+  function revealErrorSummaryWrapper(root) {
+    findSummaries(root).each(function () {
+      var wrapper = this.closest ? this.closest('.frm_error_style') : null;
+      if (!wrapper || wrapper.classList.contains('ff-has-error-summary')) {
+        return;
+      }
+      wrapper.classList.add('ff-has-error-summary');
+      wrapper.style.setProperty('display', 'block', 'important');
+      wrapper.style.setProperty('visibility', 'visible', 'important');
+    });
+  }
+
   /**
    * Focus the error summary if present.
    * Works on first load (non-AJAX submit) and when AJAX re-renders error markup.
    */
 	function focusErrorSummaryIfPresent(root) {
-	  var $summary = $(root || document).find('.ff-global-errors').first();
+	  var $summary = findSummaries(root).first();
 	  if ($summary.length) {
 		$summary.attr('tabindex', '-1');
 		// Native focus (prefer) with fallback to jQuery
@@ -18,6 +64,38 @@
 		}
 	  }
 	}
+
+  /**
+   * Focus the success message if present and no error summary is showing.
+   */
+  function focusSuccessMessageIfPresent(root) {
+    if (!CFG.successMessageFocus) {
+      return;
+    }
+
+    var $root = $(root || document);
+    if (findSummaries($root).length) {
+      return;
+    }
+
+    var $msg = $root.is('.frm_message') ? $root : $root.find('.frm_message').first();
+    if (!$msg.length) {
+      return;
+    }
+
+    var el = $msg[0];
+    if (el.getAttribute('data-ff-success-focused') === '1') {
+      return;
+    }
+    el.setAttribute('data-ff-success-focused', '1');
+    $msg.attr('tabindex', '-1');
+
+    if (el.focus) {
+      try { el.focus(); } catch (e) {}
+    } else {
+      $msg.trigger('focus');
+    }
+  }
 
   /**
    * Smoothly scroll to the field container and focus a sensible target inside it.
@@ -65,7 +143,9 @@
    * Handle initial load (non-AJAX).
    */
  $(function () {
+    revealErrorSummaryWrapper(document);
     focusErrorSummaryIfPresent(document);
+    focusSuccessMessageIfPresent(document);
     bindErrorLinkNavigation(document);
 	muteDefaultFormidableAlert(document);
 	decorateInlineErrors(document);
@@ -78,8 +158,15 @@
 	  decorateInlineErrors(form);
 	  bindErrorLinkNavigation(form);
 	  muteDefaultFormidableAlert($(form).parent());
+	  revealErrorSummaryWrapper(form);
 	  focusErrorSummaryIfPresent(form);
       observeFormidableContainers(form);
+	});
+
+	// When an AJAX submit succeeds
+	$(document).on('frmFormComplete', function () {
+	  // The original <form> may be detached after Formidable replaces .frm_forms.
+	  focusSuccessMessageIfPresent(document);
 	});
 
 	// Multipage forms with AJAX page loads:
@@ -96,16 +183,21 @@
   /**
    * Handle AJAX forms:
    * Formidable re-renders portions of the form after an AJAX submit with errors.
-   * Observe only the relevant Formidable wrappers for insertion of ".ff-global-errors".
+   * Observe only the relevant Formidable wrappers for insertion of the error summary.
    */
   function processAddedNode($node) {
     if (!$node || !$node.length) {
       return;
     }
 
-    if ($node.is('.ff-global-errors') || $node.find('.ff-global-errors').length) {
+    if (nodeHasSummary($node)) {
+      revealErrorSummaryWrapper($node);
       focusErrorSummaryIfPresent($node);
       bindErrorLinkNavigation($node);
+    }
+
+    if ($node.is('.frm_message') || $node.find('.frm_message').length) {
+      focusSuccessMessageIfPresent($node);
     }
 
     muteDefaultFormidableAlert($node);
@@ -194,7 +286,7 @@ function muteDefaultFormidableAlert(root) {
 function decorateInlineErrors(root) {
   var $root = jQuery(root || document);
   // Respect PHP toggle passed via wp_localize_script
-  if (!window.FFAE || !FFAE.inlineIconEnabled) return;
+  if (!CFG.inlineIconEnabled) return;
 
   $root.find('.frm_error, .frm_inline_error').each(function () {
     var el = this;
@@ -205,7 +297,7 @@ function decorateInlineErrors(root) {
     var span = document.createElement('span');
     span.className = 'ff-inline-error-icon';
     span.setAttribute('role', 'img');
-    span.setAttribute('aria-label', (FFAE.inlineIconAriaLabel || 'Error:'));
+    span.setAttribute('aria-label', (CFG.inlineIconAriaLabel || 'Error:'));
 
     // Inline SVG is decorative; the span carries the accessible name.
     span.innerHTML =

@@ -1,6 +1,25 @@
 /* Formidable Accessible Error Summary
    ----------------------------------- */
 
+/* Formidable wraps the summary in .frm_error_style, which some themes/styles hide. */
+.frm_style_formidable-style.with_frm_style .frm_error_style:has([data-ff-error-summary]),
+.frm_forms.with_frm_style .frm_error_style:has([data-ff-error-summary]),
+.with_frm_style .frm_error_style:has([data-ff-error-summary]),
+.frm_style_formidable-style.with_frm_style .frm_error_style.ff-has-error-summary,
+.frm_forms.with_frm_style .frm_error_style.ff-has-error-summary,
+.with_frm_style .frm_error_style.ff-has-error-summary {
+  display: block !important;
+  visibility: visible;
+}
+
+.frm_style_formidable-style.with_frm_style .frm_error_style:has([data-ff-error-summary]),
+.frm_forms.with_frm_style .frm_error_style:has([data-ff-error-summary]),
+.frm_forms.with_frm_style .frm_error_style.ff-has-error-summary {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+}
+
 .ff-global-errors {
   margin: 1em 0;
   padding: 1em;
@@ -25,16 +44,19 @@
   margin-bottom: .25em;
 }
 
-.ff-error-link {
+[data-ff-error-summary] .ff-error-list .ff-error-item a.ff-error-link,
+.ff-global-errors .ff-error-list .ff-error-item a.ff-error-link {
   color: #b00000;
-  text-decoration: none;
 }
 
-.ff-error-link:hover,
-.ff-error-link:focus {
+[data-ff-error-summary] .ff-error-list .ff-error-item a.ff-error-link:hover,
+[data-ff-error-summary] .ff-error-list .ff-error-item a.ff-error-link:focus,
+.ff-global-errors .ff-error-list .ff-error-item a.ff-error-link:hover,
+.ff-global-errors .ff-error-list .ff-error-item a.ff-error-link:focus {
   text-decoration: none;
+  border-bottom: none;
   outline: none;
-  color: #800000;
+  color: #222222;
 }
 
 .ff-error-icon {
@@ -46,11 +68,58 @@
   background: url('data:image/svg+xml;utf8,<svg fill="%23b00000" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M10 0a10 10 0 1 0 10 10A10.011 10.011 0 0 0 10 0Zm1 15H9v-2h2Zm0-4H9V5h2Z"/></svg>') no-repeat center;
   background-size: contain;
 }
+
+/* Success message (focused after valid submission) */
+.frm_forms.with_frm_style .frm_message,
+.frm_forms .frm_message {
+  margin: 1em 0;
+  padding: 1em;
+  border: 2px solid #0a7a3e;
+  border-radius: 6px;
+  background: #f0faf4;
+  color: #222222;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.frm_forms.with_frm_style .frm_message p,
+.frm_forms .frm_message p {
+  margin: 0;
+  color: inherit;
+}
+
+.frm_forms.with_frm_style .frm_message > p:first-of-type,
+.frm_forms .frm_message > p:first-of-type {
+  margin-top: 0;
+}
+
+.frm_forms.with_frm_style .frm_message:focus,
+.frm_forms .frm_message:focus {
+  outline: 2px solid #0a7a3e;
+  outline-offset: 2px;
+}
+
+.frm_forms.with_frm_style .frm_message a,
+.frm_forms .frm_message a {
+  color: #0a5c31;
+  text-decoration: underline;
+  border-bottom: none;
+}
+
+.frm_forms.with_frm_style .frm_message a:hover,
+.frm_forms.with_frm_style .frm_message a:focus,
+.frm_forms .frm_message a:hover,
+.frm_forms .frm_message a:focus {
+  color: #084424;
+  text-decoration: underline;
+  border-bottom: none;
+  outline: none;
+}
+
 .frm_forms.with_frm_style .frm_error_style {
   background-color: transparent;
   border: 0;
 }
-/* Inline field error icon */
 .frm_error,
 .frm_inline_error,
 .frm_form_field .frm_error,

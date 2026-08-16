@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Formidable Global A11y Enhancements
  * Description: Accessibility improvements for Formidable Forms outside of file uploads: focus management for global messages, cleanup for "Other" text inputs, and multi-page focus. Admin settings to toggle features.
- * Version: 1.2.4
+ * Version: 1.2.5
  * Author: Adem Cifcioglu
  * License: GPL-2.0+
  * Text Domain: formidable-global-a11y-enhancements
@@ -31,7 +31,7 @@ class Formidable_Global_A11y_Enhancements {
     }
 
     public function enqueue_assets() {
-        $ver = '1.2.4';
+        $ver = '1.2.5';
 
         wp_register_script(
             self::SCRIPT_HANDLE,
@@ -43,21 +43,23 @@ class Formidable_Global_A11y_Enhancements {
 
         $settings = $this->get_settings();
         $accessible_errors_active = class_exists( 'FF_Accessible_Error_Summary' );
-        wp_localize_script(
-            self::SCRIPT_HANDLE,
-            'ff_globa11y',
-            [
-                'other_fields_fix'       => (bool) $settings['other_fields_fix'],
-                'global_message_focus'   => (bool) $settings['global_message_focus'],
-                'success_message_focus'  => (bool) $settings['success_message_focus'],
-                'multi_page_focus'       => (bool) $settings['multi_page_focus'],
-                'multi_page_focus_level' => isset( $settings['multi_page_focus_level'] ) ? (int) $settings['multi_page_focus_level'] : 1,
-                'has_accessible_errors'  => (bool) $accessible_errors_active,
-                // If a theme/plugin disables alert roles for field errors via the filter,
-                // mirror that intent for choice fields on the front-end.
-                'remove_choice_error_alert_role' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
-                // New, generic flag (keep the old key for back-compat within this plugin).
-                'remove_alert_role_on_field_errors' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
+		wp_localize_script(
+			self::SCRIPT_HANDLE,
+			'ff_globa11y',
+			[
+				'other_fields_fix'       => (bool) $settings['other_fields_fix'],
+				'global_message_focus'   => (bool) $settings['global_message_focus'],
+				'success_message_focus'  => (bool) $settings['success_message_focus'],
+				'multi_page_focus'       => (bool) $settings['multi_page_focus'],
+				'multi_page_focus_level' => isset( $settings['multi_page_focus_level'] ) ? (int) $settings['multi_page_focus_level'] : 1,
+				'has_accessible_errors'  => (bool) $accessible_errors_active,
+				'loading_focus_anchor'   => (bool) $settings['loading_focus_anchor'],
+				'sync_page_title'        => (bool) $settings['sync_page_title'],
+				// If a theme/plugin disables alert roles for field errors via the filter,
+				// mirror that intent for choice fields on the front-end.
+				'remove_choice_error_alert_role' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
+				// New, generic flag (keep the old key for back-compat within this plugin).
+				'remove_alert_role_on_field_errors' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
             ]
         );
     }
@@ -135,9 +137,20 @@ class Formidable_Global_A11y_Enhancements {
             'success_message_focus',
             __( 'Success message focus', 'formidable-global-a11y-enhancements' ),
             function () {
-                $settings = $this->get_settings();
-                $checked  = ! empty( $settings['success_message_focus'] ) ? 'checked' : '';
-                echo '<label><input type="checkbox" name="' . esc_attr( self::OPTION_KEY ) . '[success_message_focus]" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
+                $settings  = $this->get_settings();
+                $checked   = ! empty( $settings['success_message_focus'] ) ? 'checked' : '';
+                $ae_active = class_exists( 'FF_Accessible_Error_Summary' );
+                $disabled  = $ae_active ? ' disabled="disabled" aria-disabled="true" ' : '';
+                echo '<label><input type="checkbox" ' . $disabled . ' name="' . esc_attr( self::OPTION_KEY ) . '[success_message_focus]" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
+                $desc = __( 'Focus the success message after a valid submission when Accessible Error Summary is not active.', 'formidable-global-a11y-enhancements' );
+                if ( $ae_active ) {
+                    $desc .= ' ' . sprintf(
+                        '<strong>%s</strong> %s',
+                        esc_html__( 'Note:', 'formidable-global-a11y-enhancements' ),
+                        esc_html__( 'Disabled because Accessible Error Summary is active and will handle success message focus.', 'formidable-global-a11y-enhancements' )
+                    );
+                }
+                echo '<p class="description">' . wp_kses( $desc, [ 'strong' => [] ] ) . '</p>';
             },
             self::OPTION_KEY,
             'fga11y_main'
@@ -189,21 +202,47 @@ class Formidable_Global_A11y_Enhancements {
             'fga11y_main'
         );
 
-        // Add aria-describedby to the role=group container instead of each input.
-        add_settings_field(
-            'choice_group_describedby',
-            __( 'Add aria-describedby to choice group container', 'formidable-global-a11y-enhancements' ),
-            function () {
-                $settings = $this->get_settings();
-                $checked  = ! empty( $settings['choice_group_describedby'] ) ? 'checked' : '';
-                $name     = esc_attr( self::OPTION_KEY ) . '[choice_group_describedby]';
-                echo '<label><input type="checkbox" name="' . $name . '" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
-                echo '<p class="description">' . esc_html__( 'Targets the element with role="group"/"radiogroup" (Formidable\'s default .frm_opt_container) so the whole choice set references the description/error once. Enabling this will automatically disable the per-input option above.', 'formidable-global-a11y-enhancements' ) . '</p>';
-            },
-            self::OPTION_KEY,
-            'fga11y_main'
-        );
-    }
+		// Add aria-describedby to the role=group container instead of each input.
+		add_settings_field(
+			'choice_group_describedby',
+			__( 'Add aria-describedby to choice group container', 'formidable-global-a11y-enhancements' ),
+			function () {
+				$settings = $this->get_settings();
+				$checked  = ! empty( $settings['choice_group_describedby'] ) ? 'checked' : '';
+				$name     = esc_attr( self::OPTION_KEY ) . '[choice_group_describedby]';
+				echo '<label><input type="checkbox" name="' . $name . '" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
+				echo '<p class="description">' . esc_html__( 'Targets the element with role="group"/"radiogroup" (Formidable\'s default .frm_opt_container) so the whole choice set references the description/error once. Enabling this will automatically disable the per-input option above.', 'formidable-global-a11y-enhancements' ) . '</p>';
+			},
+			self::OPTION_KEY,
+			'fga11y_main'
+		);
+
+		add_settings_field(
+			'loading_focus_anchor',
+			__( 'Add loading focus anchor', 'formidable-global-a11y-enhancements' ),
+			function () {
+				$settings = $this->get_settings();
+				$checked  = ! empty( $settings['loading_focus_anchor'] ) ? 'checked' : '';
+				echo '<label><input type="checkbox" name="' . esc_attr( self::OPTION_KEY ) . '[loading_focus_anchor]" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
+				echo '<p class="description">' . esc_html__( 'Creates an off-screen live region that receives focus before AJAX submissions to announce loading status.', 'formidable-global-a11y-enhancements' ) . '</p>';
+			},
+			self::OPTION_KEY,
+			'fga11y_main'
+		);
+
+		add_settings_field(
+			'sync_page_title',
+			__( 'Sync page title with current step', 'formidable-global-a11y-enhancements' ),
+			function () {
+				$settings = $this->get_settings();
+				$checked  = ! empty( $settings['sync_page_title'] ) ? 'checked' : '';
+				echo '<label><input type="checkbox" name="' . esc_attr( self::OPTION_KEY ) . '[sync_page_title]" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
+				echo '<p class="description">' . esc_html__( 'Updates the browser tab title using the current page heading (respecting the selected heading level).', 'formidable-global-a11y-enhancements' ) . '</p>';
+			},
+			self::OPTION_KEY,
+			'fga11y_main'
+		);
+	}
 
     public function render_settings_page() {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -227,18 +266,20 @@ class Formidable_Global_A11y_Enhancements {
         }
         $in = is_array( $input ) ? $input : [];
 
-        $out = [
-            'other_fields_fix'       => empty( $in['other_fields_fix'] ) ? 0 : 1,
-            'global_message_focus'   => empty( $in['global_message_focus'] ) ? 0 : 1,
-            'success_message_focus'  => empty( $in['success_message_focus'] ) ? 0 : 1,
-            'multi_page_focus'       => empty( $in['multi_page_focus'] ) ? 0 : 1,
-            'choice_describedby'     => empty( $in['choice_describedby'] ) ? 0 : 1,
-            'choice_group_describedby' => empty( $in['choice_group_describedby'] ) ? 0 : 1,
-            'multi_page_focus_level' => ( function() use ( $in, $current, $defaults ) {
-                if ( array_key_exists( 'multi_page_focus_level', $in ) ) {
-                    $val = (int) $in['multi_page_focus_level'];
-                    if ( $val < 1 || $val > 6 ) { $val = (int) $defaults['multi_page_focus_level']; }
-                    return $val;
+		$out = [
+			'other_fields_fix'       => empty( $in['other_fields_fix'] ) ? 0 : 1,
+			'global_message_focus'   => empty( $in['global_message_focus'] ) ? 0 : 1,
+			'success_message_focus'  => empty( $in['success_message_focus'] ) ? 0 : 1,
+			'multi_page_focus'       => empty( $in['multi_page_focus'] ) ? 0 : 1,
+			'choice_describedby'     => empty( $in['choice_describedby'] ) ? 0 : 1,
+			'choice_group_describedby' => empty( $in['choice_group_describedby'] ) ? 0 : 1,
+			'loading_focus_anchor'   => empty( $in['loading_focus_anchor'] ) ? 0 : 1,
+			'sync_page_title'        => empty( $in['sync_page_title'] ) ? 0 : 1,
+			'multi_page_focus_level' => ( function() use ( $in, $current, $defaults ) {
+				if ( array_key_exists( 'multi_page_focus_level', $in ) ) {
+					$val = (int) $in['multi_page_focus_level'];
+					if ( $val < 1 || $val > 6 ) { $val = (int) $defaults['multi_page_focus_level']; }
+					return $val;
                 }
                 return isset( $current['multi_page_focus_level'] ) ? (int) $current['multi_page_focus_level'] : (int) $defaults['multi_page_focus_level'];
             } )(),
@@ -469,17 +510,19 @@ class Formidable_Global_A11y_Enhancements {
         return true;
     }
 
-    private function defaults() {
-        return [
-            'global_message_focus'   => 0,
-            'other_fields_fix'       => 1,
-            'success_message_focus'  => 1,
-            'multi_page_focus'       => 1,
-            'multi_page_focus_level' => 1,
-            'choice_describedby'     => 1,
-            'choice_group_describedby' => 0,
-        ];
-    }
+	private function defaults() {
+		return [
+			'global_message_focus'   => 0,
+			'other_fields_fix'       => 1,
+			'success_message_focus'  => 1,
+			'multi_page_focus'       => 1,
+			'multi_page_focus_level' => 1,
+			'choice_describedby'     => 1,
+			'choice_group_describedby' => 0,
+			'loading_focus_anchor'   => 0,
+			'sync_page_title'        => 0,
+		];
+	}
 
     private function get_settings() {
         $saved = get_option( self::OPTION_KEY );
@@ -551,14 +594,16 @@ register_activation_hook( __FILE__, function () {
     $key      = Formidable_Global_A11y_Enhancements::OPTION_KEY;
     $existing = get_option( $key );
     if ( false === $existing ) {
-        add_option( $key, [
-            'global_message_focus'   => 0,
-            'other_fields_fix'       => 1,
-            'success_message_focus'  => 1,
-            'multi_page_focus'       => 1,
-            'multi_page_focus_level' => 1,
-            'choice_describedby'     => 1,
-            'choice_group_describedby' => 0,
-        ] );
-    }
-} );
+			add_option( $key, [
+				'global_message_focus'   => 0,
+				'other_fields_fix'       => 1,
+				'success_message_focus'  => 1,
+				'multi_page_focus'       => 1,
+				'multi_page_focus_level' => 1,
+				'choice_describedby'     => 1,
+				'choice_group_describedby' => 0,
+				'loading_focus_anchor'   => 0,
+				'sync_page_title'        => 0,
+			] );
+		}
+	} );
