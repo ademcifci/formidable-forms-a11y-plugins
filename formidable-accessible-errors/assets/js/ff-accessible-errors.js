@@ -97,32 +97,52 @@
     }
   }
 
+  function focusWithinContainer($container) {
+    if (!$container.length) {
+      return;
+    }
+    $container[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    var $focusTarget = $container
+      .find('input, select, textarea, [contenteditable="true"], [tabindex]:not([tabindex="-1"])')
+      .filter(':visible')
+      .first();
+
+    if (!$focusTarget.length) {
+      $focusTarget = $container
+        .find('[aria-invalid="true"]')
+        .filter(':visible')
+        .first();
+    }
+
+    if (!$focusTarget.length) {
+      $focusTarget = $container.find('input, select, textarea').filter(':visible').first();
+    }
+
+    setTimeout(function () {
+      if ($focusTarget.length) {
+        $focusTarget.trigger('focus');
+      } else {
+        $container.attr('tabindex', '-1').trigger('focus');
+      }
+    }, 250);
+  }
+
   /**
    * Smoothly scroll to the field container and focus a sensible target inside it.
    */
   function jumpToField(fieldId) {
-    var containerId = '#frm_field_' + fieldId + '_container';
-    var $container = $(containerId);
+    jumpToFieldContainer('frm_field_' + fieldId + '_container');
+  }
+
+  function jumpToFieldContainer(containerId) {
+    if (!containerId) {
+      return;
+    }
+    var hash = containerId.charAt(0) === '#' ? containerId : '#' + containerId;
+    var $container = $(hash);
     if ($container.length) {
-      // Scroll to container.
-      $container[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      // Find a focusable form control inside the container.
-		var $focusTarget = $container
-		  .find('input, select, textarea, [contenteditable="true"], [tabindex]:not([tabindex="-1"])')
-		  .filter(':visible')
-		  .first();
-
-		if (!$focusTarget.length) {
-		  $focusTarget = $container.find('input, select, textarea').filter(':visible').first();
-		}
-		setTimeout(function () {
-		  if ($focusTarget.length) {
-			$focusTarget.trigger('focus');
-		  } else {
-			$container.attr('tabindex', '-1').trigger('focus');
-		  }
-		}, 250);
+      focusWithinContainer($container);
     }
   }
 
@@ -130,11 +150,22 @@
    * Bind click handlers for error links (delegated)
    */
   function bindErrorLinkNavigation(root) {
-    $(root || document).off('click.ffErrorLink', '.ff-error-link').on('click.ffErrorLink', '.ff-error-link', function (e) {
-      var fieldId = $(this).attr('data-ff-field-id');
-      if (fieldId) {
+    var $root = $(root || document);
+    $root.off('click.ffErrorLink', '.ff-error-link, .frm_error_link').on('click.ffErrorLink', '.ff-error-link, .frm_error_link', function (e) {
+      var $link = $(this);
+      var containerId = $link.attr('data-ff-container-id');
+      var href = $link.attr('href') || '';
+      if (!containerId && href.indexOf('#frm_field_') === 0) {
+        containerId = href.slice(1);
+      }
+      var fieldId = $link.attr('data-ff-field-id');
+      if (containerId || fieldId) {
         e.preventDefault();
-        jumpToField(fieldId);
+        if (containerId) {
+          jumpToFieldContainer(containerId);
+        } else {
+          jumpToField(fieldId);
+        }
       }
     });
   }
@@ -288,7 +319,7 @@ function decorateInlineErrors(root) {
   // Respect PHP toggle passed via wp_localize_script
   if (!CFG.inlineIconEnabled) return;
 
-  $root.find('.frm_error, .frm_inline_error').each(function () {
+  $root.find('.frm_error, .frm_inline_error, [data-frm-error]').each(function () {
     var el = this;
     if (el.hasAttribute('data-ff-decorated')) return;
     el.setAttribute('data-ff-decorated', '1');

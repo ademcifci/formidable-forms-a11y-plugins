@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Formidable - Accessible Error Summary
  * Description: Accessible error summary for Formidable Forms: focuses the summary, and links each error to the field. Disables default first-error focus & per-field alert roles.
- * Version:     1.3.5
+ * Version:     1.4.0
  * Author:      Adem Cifcioglu
  * License:     GPL-2.0+
  * Text Domain: ff-accessible-errors
@@ -31,8 +31,12 @@ class FF_Accessible_Error_Summary {
 		add_action( 'frm_enqueue_form_scripts', [ __CLASS__, 'maybe_enqueue_assets' ], 10, 1 );
 
 		// Disable Formidable's default behaviours that interfere with our UX.
-		add_filter( 'frm_focus_first_error', '__return_false' );
-		add_filter( 'frm_include_alert_role_on_field_errors', '__return_false' );
+		add_filter( 'frm_focus_first_error', [ __CLASS__, 'disable_focus_first_error' ], 10, 2 );
+		add_filter( 'frm_include_alert_role_on_field_errors', [ __CLASS__, 'disable_field_error_alert_role' ], 10, 2 );
+
+		// Formidable 7.0+: opt out of core clickable summary; this plugin replaces it via frm_invalid_error_message.
+		add_filter( 'frm_show_clickable_field_errors', [ __CLASS__, 'disable_core_clickable_errors' ], 10, 2 );
+		add_filter( 'frm_focus_error_summary', [ __CLASS__, 'disable_core_summary_focus' ], 10, 2 );
 
 		// Admin settings.
 		add_action( 'admin_menu', [ __CLASS__, 'register_settings_page' ] );
@@ -49,9 +53,52 @@ class FF_Accessible_Error_Summary {
 		return $errors;
 	}
 
+	/**
+	 * @param mixed $default
+	 * @param mixed $form
+	 * @return false
+	 */
+	public static function disable_focus_first_error( $default, $form = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		return false;
+	}
+
+	/**
+	 * @param mixed $default
+	 * @param mixed $form
+	 * @return false
+	 */
+	public static function disable_field_error_alert_role( $default, $form = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		return false;
+	}
+
+	/**
+	 * @param mixed $show
+	 * @param mixed $args
+	 * @return false
+	 */
+	public static function disable_core_clickable_errors( $show, $args = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		return false;
+	}
+
+	/**
+	 * Focus is handled by plugin JS on the accessible summary, not core's data-frm-error-summary wrapper.
+	 *
+	 * @param mixed $focus
+	 * @param mixed $form
+	 * @return false
+	 */
+	public static function disable_core_summary_focus( $focus, $form = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		return false;
+	}
+
 	public static function render_error_summary( $invalid_msg, $args ) {
 		$errors  = self::$errors;
 		$form_id = self::$form_id;
+
+		// 7.0 passes errors on $args; keep captured errors as primary for older versions.
+		if ( empty( $errors ) && ! empty( $args['errors'] ) && is_array( $args['errors'] ) ) {
+			$errors = $args['errors'];
+		}
 
 		if ( empty( $errors ) || ! is_array( $errors ) ) {
 			return esc_html__( 'There was a problem with your submission. Errors are marked below.', 'ff-accessible-errors' );
@@ -81,15 +128,25 @@ class FF_Accessible_Error_Summary {
 			$msg = is_array( $message ) ? implode( ' ', $message ) : (string) $message;
 			$msg = trim( $msg );
 
+			if ( '' === $msg ) {
+				continue;
+			}
+
+			$parsed = self::parse_field_error_key( $key );
+			if ( $parsed ) {
+				$field_id     = $parsed['field_id'];
+				$container_id = $parsed['container_id'];
+				$out         .= '<li class="ff-error-item"><a class="ff-error-link" href="#' . esc_attr( $container_id ) . '" data-ff-field-id="' . esc_attr( $field_id ) . '" data-ff-container-id="' . esc_attr( $container_id ) . '">' . esc_html( $msg ) . '</a></li>';
+				continue;
+			}
+
 			$field_id = self::resolve_field_id( $key, $field_map );
-			if ( ! empty( $msg ) ) {
-				if ( $field_id ) {
-					$container_id = 'frm_field_' . $field_id . '_container';
-					$out         .= '<li class="ff-error-item"><a class="ff-error-link" href="#' . esc_attr( $container_id ) . '" data-ff-field-id="' . esc_attr( $field_id ) . '">' . esc_html( $msg ) . '</a></li>';
-				} else {
-					// Non-field/global errors.
-					$out .= '<li class="ff-error-item">' . esc_html( $msg ) . '</li>';
-				}
+			if ( $field_id ) {
+				$container_id = 'frm_field_' . $field_id . '_container';
+				$out         .= '<li class="ff-error-item"><a class="ff-error-link" href="#' . esc_attr( $container_id ) . '" data-ff-field-id="' . esc_attr( $field_id ) . '" data-ff-container-id="' . esc_attr( $container_id ) . '">' . esc_html( $msg ) . '</a></li>';
+			} else {
+				// Non-field/global errors.
+				$out .= '<li class="ff-error-item">' . esc_html( $msg ) . '</li>';
 			}
 		}
 
@@ -124,6 +181,46 @@ class FF_Accessible_Error_Summary {
 			}
 		}
 		return $map;
+	}
+
+	/**
+	 * Parse Formidable field error keys (field123, field123-line1, repeater rows, etc.).
+	 * Mirrors Formidable 7.0 container id rules for combo/repeater suffixes.
+	 *
+	 * @param string|int $error_key
+	 * @return array{field_id: int, container_id: string}|null
+	 */
+	private static function parse_field_error_key( $error_key ) {
+		$key = (string) $error_key;
+		if ( ! function_exists( 'str_starts_with' ) ) {
+			$starts_with = ( 0 === strpos( $key, 'field' ) );
+		} else {
+			$starts_with = str_starts_with( $key, 'field' );
+		}
+
+		if ( ! $starts_with ) {
+			return null;
+		}
+
+		$suffix = substr( $key, strlen( 'field' ) );
+		if ( '' === $suffix || ! preg_match( '/^\d/', $suffix ) ) {
+			return null;
+		}
+
+		$parts = explode( '-', $suffix );
+		$field_id = (int) $parts[0];
+		if ( ! $field_id ) {
+			return null;
+		}
+
+		if ( count( $parts ) > 3 ) {
+			$parts = array_slice( $parts, 0, 3 );
+		}
+
+		return array(
+			'field_id'     => $field_id,
+			'container_id' => 'frm_field_' . implode( '-', $parts ) . '_container',
+		);
 	}
 
 	/**
@@ -175,7 +272,7 @@ class FF_Accessible_Error_Summary {
 			'ff-accessible-errors',
 			plugins_url( 'assets/js/ff-accessible-errors.js', __FILE__ ),
 			[ 'jquery' ],
-			'1.3.5',
+			'1.4.0',
 			true
 		);
 
@@ -195,6 +292,7 @@ class FF_Accessible_Error_Summary {
 				'inlineIconAriaLabel'  => (string) $inline_icon_label,
 				'successMessageFocus'  => (bool) $success_message_focus,
 				'errorSummarySelector' => (string) $summary_selector,
+				'formidableVersion'    => (string) self::formidable_version(),
 			]
 		);
 
@@ -206,9 +304,21 @@ class FF_Accessible_Error_Summary {
 				'ff-accessible-errors',
 				plugins_url( 'assets/css/ff-accessible-errors.css', __FILE__ ),
 				$style_deps,
-				'1.3.5'
+				'1.4.0'
 			);
 		}
+	}
+
+	/**
+	 * Installed Formidable Lite version, or empty string.
+	 *
+	 * @return string
+	 */
+	private static function formidable_version() {
+		if ( class_exists( 'FrmAppHelper' ) && method_exists( 'FrmAppHelper', 'plugin_version' ) ) {
+			return (string) FrmAppHelper::plugin_version();
+		}
+		return '';
 	}
 
 	public static function maybe_enqueue_assets( $params = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter

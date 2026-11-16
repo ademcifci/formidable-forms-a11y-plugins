@@ -13,7 +13,7 @@ Accessible, keyboard-friendly error summary for Formidable Forms.
 - **Field resolution engine**: While capturing `frm_validate_entry` errors the plugin caches the current form id, then builds a map of field ids, prefixed ids (e.g. `field123`, `frm_field_123`), and field keys/slugs via `FrmField::get_all_for_form()`. That lookup lets it associate each validation message with the correct container regardless of how Formidable keyed the error.
 - **Focus & navigation JS**: `assets/js/ff-accessible-errors.js` focuses the summary as soon as it appears (initial render, AJAX error refresh, or multipage transition), binds click handlers so activating an error link scrolls to `#frm_field_{id}_container`, and then focuses the first visible input/select/textarea. It retries focus after a short delay to ensure dynamically-rendered controls are ready.
 - **Scoped AJAX & multipage resilience**: MutationObservers are attached only to `.frm_forms` wrappers (even ones injected later), avoiding expensive document-wide observation while still catching newly inserted `.ff-global-errors` blocks. Native Formidable events (`frmFormErrors`, `frmPageChanged`) trigger inline error decoration and re-binding for Next/Prev transitions.
-- **Alert muting & inline icon options**: Filters `frm_focus_first_error` and `frm_include_alert_role_on_field_errors` to prevent Formidable from battling for focus or firing duplicate live alerts, and the JS strips `role="alert"` from `.frm_error_style` containers once per render. An inline SVG icon with an accessible `aria-label` can be injected into every `.frm_error`/`.frm_inline_error`; site owners can toggle it or change the label via `ff_accessible_errors_inline_icon_enabled` and `ff_accessible_errors_inline_icon_aria_label`.
+- **Alert muting & inline icon options**: Filters `frm_focus_first_error`, `frm_include_alert_role_on_field_errors`, and on Formidable 7.0+ also `frm_show_clickable_field_errors` / `frm_focus_error_summary`. The JS strips `role="alert"` from `.frm_error_style`, decorates `[data-frm-error]` nodes, and links use `data-ff-container-id` for combo/repeater fields. Inline SVG icons are optional via `ff_accessible_errors_inline_icon_enabled` and `ff_accessible_errors_inline_icon_aria_label`.
 - **Opt-in styling**: Unless `ff_accessible_errors_load_css` returns false, `assets/css/ff-accessible-errors.css` styles the summary, error list links, and inline icon layout while letting `currentColor` drive the icon hue so it inherits surrounding theme colors.
 
 ## Requirements
@@ -53,7 +53,7 @@ Customize behavior via WordPress filters:
 - If you also use "Formidable Global A11y Enhancements", that plugin will automatically disable its global message focusing to avoid conflicts, allowing this plugin to lead.
 
 ## Development Notes
-- Version: 1.2.0
+- Version: 1.4.0
 - Registers JS/CSS globally but enqueues them via `frm_enqueue_form_scripts`, so assets load whenever a Formidable form is included.
 - PHP entry: `formidable-accessible-errors.php`.
 

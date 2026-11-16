@@ -24,8 +24,16 @@
     remove_choice_error_alert_role: false,
     loading_focus_anchor: false,
     sync_page_title: false,
-    debug_tabindex: false
+    debug_tabindex: false,
+    formidable_version: ''
   };
+
+  function isFormidable7OrNewer() {
+    var v = CFG.formidable_version || '';
+    var parts = String(v).split('.');
+    var major = parseInt(parts[0], 10);
+    return !isNaN(major) && major >= 7;
+  }
   CFG.has_accessible_errors = !!CFG.has_accessible_errors;
   try {
     if (!CFG.debug_tabindex) {
@@ -92,7 +100,7 @@
     var REMOVE_ALERT = !!(CFG.remove_alert_role_on_field_errors || CFG.remove_choice_error_alert_role);
     if (!REMOVE_ALERT) return;
     var $ctx = context ? $(context) : $(document);
-    $ctx.find('.frm_error_style[role="alert"], .frm_error[role="alert"], .frm_inline_error[role="alert"]').each(function () {
+    $ctx.find('.frm_error_style[role="alert"], .frm_error[role="alert"], .frm_inline_error[role="alert"], [data-frm-error][role="alert"]').each(function () {
       var $err = $(this);
       if ($err.attr('role') === 'alert') {
         $err.removeAttr('role');
@@ -129,6 +137,17 @@
         try { trackTabindex($errorHeading, 'legacy global-errors h2'); } catch (e) {}
         safeFocus($errorHeading);
         return;
+      }
+
+      // Formidable 7.0 core summary (when Accessible Errors is not replacing markup).
+      if (isFormidable7OrNewer()) {
+        var $coreSummary = $ctx.find('[data-frm-error-summary]').first();
+        if ($coreSummary.length && !$ctx.find('[data-ff-error-summary]').length) {
+          $coreSummary.attr('tabindex', '-1');
+          try { trackTabindex($coreSummary, 'frm_error_style data-frm-error-summary'); } catch (e) {}
+          safeFocus($coreSummary);
+          return;
+        }
       }
     }
 
