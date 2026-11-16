@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Formidable Global A11y Enhancements
  * Description: Accessibility improvements for Formidable Forms outside of file uploads: focus management for global messages, cleanup for "Other" text inputs, and multi-page focus. Admin settings to toggle features.
- * Version: 1.2.5
+ * Version: 1.3.0
  * Author: Adem Cifcioglu
  * License: GPL-2.0+
  * Text Domain: formidable-global-a11y-enhancements
@@ -31,7 +31,7 @@ class Formidable_Global_A11y_Enhancements {
     }
 
     public function enqueue_assets() {
-        $ver = '1.2.5';
+        $ver = '1.3.0';
 
         wp_register_script(
             self::SCRIPT_HANDLE,
@@ -57,9 +57,10 @@ class Formidable_Global_A11y_Enhancements {
 				'sync_page_title'        => (bool) $settings['sync_page_title'],
 				// If a theme/plugin disables alert roles for field errors via the filter,
 				// mirror that intent for choice fields on the front-end.
-				'remove_choice_error_alert_role' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
+				'remove_choice_error_alert_role' => $this->should_strip_field_error_alert_roles(),
 				// New, generic flag (keep the old key for back-compat within this plugin).
-				'remove_alert_role_on_field_errors' => (bool) ( ! apply_filters( 'frm_include_alert_role_on_field_errors', true ) ),
+				'remove_alert_role_on_field_errors' => $this->should_strip_field_error_alert_roles(),
+				'formidable_version'             => $this->formidable_version(),
             ]
         );
     }
@@ -105,7 +106,7 @@ class Formidable_Global_A11y_Enhancements {
                 $settings = $this->get_settings();
                 $checked  = ! empty( $settings['other_fields_fix'] ) ? 'checked' : '';
                 echo '<label><input type="checkbox" name="' . esc_attr( self::OPTION_KEY ) . '[other_fields_fix]" value="1" ' . $checked . '> ' . esc_html__( 'Enable', 'formidable-global-a11y-enhancements' ) . '</label>';
-                echo "<p class=\"description\">Hide duplicate screen-reader-only labels for \"Other\" text inputs, move that text into aria-label, and remove alert roles from inline error elements that aren't removed by <code>add_filter( 'frm_include_alert_role_on_field_errors', '__return_false' );</code>. These fixes probably aren't needed any more due to changes in Formidable core, but will do no harm </p>";
+                echo '<p class="description">' . esc_html__( 'Hides duplicate screen-reader-only labels for "Other" text inputs, moves that text into aria-label, and strips alert roles from inline errors when your site disables them (including Formidable 7.0 defaults when a clickable summary is active). Harmless to leave enabled on older Formidable versions.', 'formidable-global-a11y-enhancements' ) . '</p>';
             },
             self::OPTION_KEY,
             'fga11y_main'
@@ -309,10 +310,10 @@ class Formidable_Global_A11y_Enhancements {
             return $html;
         }
 
+        $html_id   = apply_filters( 'frm_field_get_html_id', 'field_' . $field_key, $field );
         $errors    = isset( $atts['errors'] ) && is_array( $atts['errors'] ) ? $atts['errors'] : [];
-        $has_error = isset( $errors[ 'field' . $field_id ] );
+        $has_error = $this->field_has_validation_error( $errors, $field_id );
 
-        $html_id = apply_filters( 'frm_field_get_html_id', 'field_' . $field_key, $field );
         $desc_id = 'frm_desc_' . $html_id;
         $err_id  = 'frm_error_' . $html_id;
 
@@ -569,6 +570,57 @@ class Formidable_Global_A11y_Enhancements {
      *
      * @return bool
      */
+    /**
+     * Whether this choice field has a validation error in the current request.
+     *
+     * @param array  $errors
+     * @param int    $field_id
+     * @return bool
+     */
+    private function field_has_validation_error( array $errors, $field_id ) {
+        $field_id = (int) $field_id;
+        if ( isset( $errors[ 'field' . $field_id ] ) ) {
+            return true;
+        }
+
+        $prefix = 'field' . $field_id . '-';
+        foreach ( $errors as $key => $message ) {
+            if ( ! is_string( $key ) || 0 !== strpos( $key, $prefix ) ) {
+                continue;
+            }
+            $msg = is_array( $message ) ? implode( ' ', $message ) : (string) $message;
+            if ( '' !== trim( $msg ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return bool
+     */
+    private function should_strip_field_error_alert_roles() {
+        if ( class_exists( 'FF_Accessible_Error_Summary' ) ) {
+            return true;
+        }
+
+        $default = true;
+        $form    = null;
+
+        return ! (bool) apply_filters( 'frm_include_alert_role_on_field_errors', $default, $form );
+    }
+
+    /**
+     * @return string
+     */
+    private function formidable_version() {
+        if ( class_exists( 'FrmAppHelper' ) && method_exists( 'FrmAppHelper', 'plugin_version' ) ) {
+            return (string) FrmAppHelper::plugin_version();
+        }
+        return '';
+    }
+
     private function should_skip_choice_filter() {
         if ( is_admin() && ! wp_doing_ajax() ) {
             return true;

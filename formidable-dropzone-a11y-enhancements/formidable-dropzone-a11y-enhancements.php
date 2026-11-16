@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Formidable Dropzone A11y Enhancements
  * Description: Accessibility fixes for Formidable Forms Dropzone upload fields — focus management, "Other" labels, and upload announcements.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: Adem Cifcioglu
  * License: GPL-2.0+
  */
@@ -38,7 +38,7 @@ class Formidable_Dropzone_A11y_Enhancements {
 			return;
 		}
 
-		$ver = '1.0.3';
+		$ver = '1.0.4';
 
 		wp_register_style(
 			'formidable-dropzone-a11y-enhancements',
